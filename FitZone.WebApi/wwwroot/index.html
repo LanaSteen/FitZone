@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitZone - Move more. Train smarter.</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="fz-nav">
+        <a href="#/" class="navbar-brand">
+            <span class="fz-logo">⚡</span>
+            <span>FitZone</span>
+        </a>
+
+        <button id="navToggle" class="nav-toggle" style="display: none; background: none; border: none; color: #fff; cursor: pointer; font-size: 1.5rem;">☰</button>
+
+        <ul class="nav-links">
+            <li><a href="#/home">Home</a></li>
+            <li><a href="#/trainers">Trainers</a></li>
+            <li><a href="#/sessions">Sessions</a></li>
+            <li><a href="#/memberships">Memberships</a></li>
+            <li><a href="#/profile">Profile</a></li>
+            <li><a href="#/my-bookings">My Bookings</a></li>
+            <li id="authLink"></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div id="app"></div>
+
+    <!-- Scripts -->
+    <script src="/js/api-client.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

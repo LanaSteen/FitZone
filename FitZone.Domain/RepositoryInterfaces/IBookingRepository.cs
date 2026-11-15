@@ -1,0 +1,29 @@
+﻿using FitZone.Domain.Entities.Models;
+using FitZone.Domain.Enums;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace FitZone.Domain.RepositoryInterfaces
+{
+    public  interface IBookingRepository
+    {
+        Task AddAsync(Booking booking, CancellationToken ct = default);
+
+        Task<Booking?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+        Task<(ICollection<Booking> Items, int TotalCount)> GetByUserAsync(
+    Guid userId, int page, int pageSize, CancellationToken ct = default);
+
+        // მომავალი და მიმდინარე ჯავშნები (გაუქმებული/NoShow არა, სესია ჯერ არ დასრულებულა), უახლოესი პირველი
+        Task<ICollection<Booking>> GetUpcomingByUserAsync(Guid userId, CancellationToken ct = default);
+        Task<(ICollection<Booking> Items, int TotalCount)> GetFilteredAsync(Guid? sessionId, BookingStatus? status, string? trainerName, DateOnly? date,int page, int pageSize, CancellationToken ct = default);
+
+        Task<bool> UserHasActiveBookingAsync(Guid userId, Guid sessionId, CancellationToken ct = default);
+
+        Task<bool> UserHasOverlapAsync(Guid userId, DateTime startsAt, DateTime endsAt, CancellationToken ct = default);
+
+    }
+}

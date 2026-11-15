@@ -1,0 +1,206 @@
+using FitZone.Application;
+using FitZone.Application.Implementations;
+using FitZone.Application.ServiceInterfaces;
+using FitZone.Application.Validators;
+using FitZone.Domain.Interfaces;
+using FitZone.Domain.RepositoryInterfaces;
+using FitZone.Infrastructure;
+using FitZone.Infrastructure.Data;
+using FitZone.Infrastructure.Email;
+using FitZone.Infrastructure.JwtTokenService;
+using FitZone.Infrastructure.Repositories;
+using FitZone.Infrastructure.Repositorys;
+using FitZone.Infrastructure.Settings;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Reflection;
+using FitZone.WebApi.Middleware;
+
+namespace FitZone.WebApi
+{
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+            var builder = WebApplication.CreateBuilder(args);
+
+            builder.Services.AddAutoMapper(cfg =>
+            {
+                cfg.AddProfile<MappingProfile>();
+            });
+
+            builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+            builder.Services.AddDbContext<FitZoneDbContext>(options =>
+                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            builder.Services.AddOptions<EmailSettings>()
+                 .Bind(builder.Configuration.GetSection("EmailSettings"))
+                    .ValidateDataAnnotations()
+                      .ValidateOnStart();
+
+
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+            builder.Services.AddScoped<IUserRepository, UserRepository>();
+            builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+            builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+            builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+            builder.Services.AddScoped<IMembershipService, MembershipService>();
+            builder.Services.AddScoped<IMembershipPlanRepository, MembershipPlanRepository>();
+            builder.Services.AddScoped<IUserMembershipRepository, UserMembershipPlanRepository>();
+            builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+            builder.Services.AddScoped<IVisitService, VisitService>();
+            builder.Services.AddScoped<IProfileService, ProfileService>();
+            builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<ITrainerRepository, TrainerRepository>();
+            builder.Services.AddScoped<ITrainerService, TrainerService>();
+            builder.Services.AddScoped<IWorkOutSessionRepository, WorkOutSessioRepository>();
+            builder.Services.AddScoped<IWorkOutSessionService, WorkoutSessionService>();
+            builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+            builder.Services.AddScoped<IBookingService, BookingService>();
+
+
+            if (builder.Configuration.GetValue<bool>("UseRealEmail"))
+                builder.Services.AddScoped<IEmailSender, SmtpEmailSenderService>();
+            else
+                builder.Services.AddScoped<IEmailSender, DevelopmentEmailSender>();
+
+            builder.Services.AddValidatorsFromAssemblyContaining<CreatingBookingRequestDTOValidator>();
+            builder.Services.AddFluentValidationAutoValidation();
+
+
+            builder.Services.Configure<JwtSettings>(
+               builder.Configuration.GetSection("JwtTokenSettings"));
+
+
+            var jwtSettings = builder.Configuration.GetSection("JwtTokenSettings").Get<JwtSettings>()
+               ?? throw new InvalidOperationException("JwtSettings section is missing.");
+
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+           .AddJwtBearer(options =>
+           {
+               options.TokenValidationParameters = new TokenValidationParameters
+               {
+                   ValidateIssuer = true,
+                   ValidateAudience = true,
+                   ValidateLifetime = true,
+                   ValidateIssuerSigningKey = true,
+                   ValidIssuer = jwtSettings.Issuer,
+                   ValidAudience = jwtSettings.Audience,
+                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+                   ClockSkew = TimeSpan.Zero
+               };
+           });
+
+
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Enter JWT token without Bearer prefix."
+                });
+
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+
+                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                options.IncludeXmlComments(xmlPath);
+            });
+
+            // Add services to the container.
+
+
+            builder.Services.AddAuthorization();
+
+            builder.Services.AddControllers();
+            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+            builder.Services.AddEndpointsApiExplorer();
+
+            // Add CORS for API requests from static files
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowLocalhost", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
+
+            builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+            builder.Services.AddProblemDetails();
+
+            var app = builder.Build();
+
+            // Configure the HTTP request pipeline.
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI();
+            }
+
+            app.UseExceptionHandler();
+
+            app.UseHttpsRedirection();
+
+            // Use CORS
+            app.UseCors("AllowLocalhost");
+
+            // Serve static files from wwwroot
+            app.UseStaticFiles();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.MapControllers();
+
+            // SPA fallback: serve index.html for non-API routes
+            app.MapFallback(async context =>
+            {
+                var path = context.Request.Path.Value;
+                if (path != null && !path.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fileProvider = context.RequestServices.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
+                    var fileInfo = fileProvider.GetFileInfo("index.html");
+                    if (fileInfo.Exists)
+                    {
+                        context.Response.ContentType = "text/html";
+                        await context.Response.SendFileAsync(fileInfo.PhysicalPath!);
+                    }
+                }
+            });
+
+            app.Run();
+        }
+    }
+}
